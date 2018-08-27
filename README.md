@@ -78,7 +78,11 @@ let Mermaid = JEEP.GetObjectDef("Mermaid");
 let m = Mermaid.New("Mermy");
 m.liveOneMoment();
 
+```
 
+```
+ Mermaid Mermy breathing through nose 
+ Mermaid Mermy moving using tail fins
 ```
 
 ## Authors
