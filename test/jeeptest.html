@@ -1,0 +1,25 @@
+<html>
+<head>
+<title>JEEP Test</title>
+<style>
+#result-div
+{
+	width: 80%;
+	border-right: 1px solid gray;
+}
+</style>
+</head>
+<body>
+<div id="result-div">
+</div>
+</body>
+<script type="text/javascript" src="../jeep.js"></script>
+<script type="text/javascript" src="aspects.js"></script>
+<script type="text/javascript" src="tester.js"></script>
+<script type="text/javascript" src="utils.js"></script>
+<script type="text/javascript" src="jeeptest.js"></script>
+<script>
+res = document.getElementById("result-div")
+JEEPTEST.Run(res);
+</script>
+</html>
