@@ -1,0 +1,338 @@
+<html>
+<head>
+<title>Tiny Hierarchy Visualizer</title>
+<style>
+.list
+{
+	list-style-position: inside;
+	padding: 0;
+}
+.list-item
+{
+	padding-top: 2px;
+}
+.btn
+{
+	font-size: 12px;
+	cursor: pointer;
+}
+#script-box
+{
+	padding: 3px;
+	resize: none;
+	font: 14px consolas;
+	border: 1px solid gray;
+	width: 400px;
+	height: 100px;
+}
+#mainTitle 
+{
+	font-size: 20px;
+	font-weight: bold;
+}
+</style>
+</head>
+<body>
+<span id="mainTitle">Hierarchy Visualization Tool</span>
+<span>using <em>Tiny</em> library, part of JEEP demonstration code.</span>
+<hr>
+<p>Boxes represent classes and lines represent inheritance relationship. Lower boxes inherit from higher boxes. </p>
+<div style="display: inline-block;">
+<div style="display: inline-block;vertical-align: top">
+<div id="diagram""></div>
+</div>
+<div style="display: inline-block;vertical-align: top">
+<div id="tab"></div>
+<p id="script-label"style="line-height: 0">
+Script
+<button class="btn", id="draw-script">Draw</button>
+<button class="btn", id="add-script">Add</button>
+<button class="btn", id="update-script">Update</button>
+<button class="btn", id="remove-script">Remove</button>
+<button class="btn", id="clear-script">Clear</button>
+</p>
+<textarea spellcheck='false' id="script-box"></textarea>
+</div>
+</div>
+</body>
+<script type="text/javascript" src="../jeep.js"></script>
+<script type="text/javascript" src="tinycanvas.js"></script>
+<script type="text/javascript" src="tinypainter.js"></script>
+<script type="text/javascript" src="tinyhiertree.js"></script>
+<script type="text/javascript" src="tinytab.js"></script>
+<script>
+JEEP.InitFramework();
+Env = JEEP.CreateEnvironment({client: "jeep-aware", mode: "development-mode"})
+//Env = JEEP.CreateEnvironment({client: "jeep-aware", mode: "production-mode"})
+
+PainterLib = Env.GetLibrary("TinyPainter")
+TinyHierTreeLib = Env.GetLibrary("TinyHierTree")
+TinyTabLib = Env.GetLibrary("TinyTab")
+
+scriptBox = document.getElementById("script-box")
+
+//-----------------------------------------------------------------------
+// extend the tree in TinyHierTreeLib for application related logic
+//-----------------------------------------------------------------------
+
+TinyHierTree = TinyHierTreeLib.GetObjectDef("Tree")
+let NodeColors = TinyHierTreeLib.GetObjectDef("NodeColors")
+
+let NodeFlags = JEEP.Utils.MakeFlags("", "NONE, MEMBER, VIRTUAL, ABSTRACT, IMPLEMENT")
+NodeFlags.NONE = 0;
+
+AppHierTree = Env.CreateClassDef("AppHierTree", {
+	EXTENDS: [TinyHierTree],
+	PROTECTED: {
+		GetNodeColors__virtual: function(args){	
+			let nci = NodeColors.New();	
+			let flag = NodeFlags.NONE;
+			switch(args){
+				case "v": flag = NodeFlags.VIRTUAL; break;
+				case "a": flag = NodeFlags.ABSTRACT; break;
+				case "m": flag = NodeFlags.MEMBER; break;
+				case "x": flag = NodeFlags.IMPLEMENT; break;
+			}
+			let ci = this.$static.getColors(flag);
+			nci.textColor = ci.txcolor;
+			nci.backgroundColor = ci.color;
+			return nci;
+		}
+	},
+	STATIC: {
+		GetLegend: function(){
+			let div = document.createElement("div")
+			div.style.backgroundColor = "white"
+			div.style.border = "1px solid gray"
+			div.style.padding = "5px"
+			let title = document.createElement("span");
+			title.textContent = "Colors wrt member function F"
+			div.appendChild(title)
+			let iter = JEEP.Utils.ObjectIterator.New(NodeFlags);
+			while(iter.GetNext()){
+				let pair = iter.GetCurrPair();
+				let t = null;
+				switch(pair.key){
+					case "NONE": t = "absent"; break;
+					case "MEMBER": t = "plain"; break;
+					case "VIRTUAL": t = "virtual"; break;
+					case "ABSTRACT": t = "abstract"; break;
+					case "IMPLEMENT": t = "implemention pending"; break;
+					default: continue;// ignore other flags
+				}
+				let row = document.createElement("div");
+				let color = document.createElement("span");
+				color.textContent = "__"
+				color.style.border = "1px solid black";
+				color.style.backgroundColor = this.getColors(pair.value).color || "white";
+				color.style.color = color.style.backgroundColor;
+				let label = document.createElement("span");
+				label.textContent = t;
+				label.style.marginLeft = "1em";
+				row.appendChild(color);
+				row.appendChild(label);
+				div.appendChild(row);
+			}
+			return div;
+		},
+		getColors__private: function(flag){
+			switch(flag){
+				case NodeFlags.MEMBER: return {color: "lightblue", txcolor: "blue"}; 
+				case NodeFlags.VIRTUAL: return {color: "#feebab", txcolor: "black"}; 
+				case NodeFlags.ABSTRACT: return {color: "lightcoral", txcolor: "white"};
+				case NodeFlags.IMPLEMENT: return {color: "gray", txcolor: "white"}; 
+			}
+			return {color: "", txcolor: "black"}
+		},
+	},
+});
+
+//-----------------------------------------------------------------------
+// extend the tab in TinyTabLib for application related logic
+//-----------------------------------------------------------------------
+
+TinyTab = TinyTabLib.GetObjectDef("Tab")
+TabPanel = TinyTabLib.GetObjectDef("Panel")
+
+AppTab = Env.CreateClassDef("AppTab", {
+	EXTENDS: [TinyTab],
+	CONSTRUCTOR: function(){
+		this.listClickHandler = this.listClickHandlerFunc.bind(this);
+	},
+	PUBLIC: {
+		AddTab: function(id, infoArr){
+			this.addTab(id, infoArr)
+		},
+		AddUserScript: function(scr){
+			if(!this.userList)
+				this.userList = this.addTab("User Scripts", {})
+			let li = document.createElement('li')
+			li.className ="list-item"
+			let label = "script-" + this.userCounter++;
+			li.textContent = label;
+			this.userList.appendChild(li)
+			this.userList.structInfo[label] = scr;
+		},
+		UpdateUserScript: function(scr){
+			if(!this.currSel || (this.currSel.parentElement != this.userList))
+				return;
+			this.userList.structInfo[this.currSel.textContent] = scr;
+		},
+		RemoveUserScript: function(){
+			if(this.currSel && (this.currSel.parentElement === this.userList)){
+				delete this.userList[this.currSel.textContent];
+				this.userList.removeChild(this.currSel);
+				this.currSel = null
+			}
+		},
+		ResetCurrSel: function(){
+			if(this.currSel)
+				this.currSel.style.color = "black"
+		}
+	},
+	PROTECTED: {
+		UpdateTab__virtual: function(tab){
+			tab.style.color = (this.currSel && tab.panel == this.currSel.parentElement) ? "blue" : "black"
+		},
+	},
+	PRIVATE: {
+		currSel: null,
+		userList: null,
+		userCounter: 0,
+		addTab: function(id, infoArr){
+			let info = {}
+			for(let k = 0; k<infoArr.length; k++)
+				info[infoArr[k].name] = infoArr[k].code
+			let list = document.createElement("ol")
+			list.className = "list"
+			list.structInfo = info;
+			let panel =  TabPanel.InitNew({title: id})
+			panel.domElement = list;// InitNew copies props, and messes up DOM, so add separately
+			this.AddPanel(panel)
+			list.style.cursor = "pointer"
+			list.onclick = this.listClickHandler;
+			let keys = Object.keys(info)
+			for(let k = 0; k<keys.length; k++){
+				let li = document.createElement('li')
+				li.className ="list-item"
+				li.textContent = keys[k];
+				list.appendChild(li)
+			}
+			return list;
+		},
+		listClickHandlerFunc: function(e){
+			this.ResetCurrSel();
+			let t = e.target;
+			this.currSel = t;
+			this.currSel.style.color = "blue";
+			this.UpdateAllTabs();
+			let c = t.parentElement.structInfo[t.textContent]
+			tree.Reset(c, painter)
+			scriptBox.value = c;
+		}
+	},
+})
+
+// use the extended classes
+
+legend = AppHierTree.STATIC.GetLegend();
+legend.style.position = "fixed";
+legend.style.right = "5"
+legend.style.bottom = "5"
+document.body.appendChild(legend);
+
+tab = AppTab.New()
+tab.SetSize("100px", "170px")
+tabelem = document.getElementById("tab")
+tabelem.appendChild(tab.getDomElement())
+
+tab.AddTab("Basic", [
+	{name: "(SISL) single inheritance single level", code: "$Base[Derived]"},
+	{name: "(SIML) single inheritance multiple level", code: "$TopBase[MidBase] MidBase[Derived]"},
+	{name: "(MISL) multiple inheritance single level", code: "$BaseA[Derived] $BaseB[Derived]"},
+	{name: "(MIML) multiple inheritance multiple level", code: "$TopBase[BaseA] BaseA[Derived] $BaseB[Derived]"},
+	{name: "(DSL) diamond inheritance single level", code: "$TopBase[BaseA, BaseB] BaseA[Derived] BaseB[Derived]"},
+	{name: "(DML) diamond inheritance multiple level", code: "$TopBase[BaseA, BaseB] BaseA[MidBase] BaseB[MidBase] MidBase[MidBaseA, MidBaseB] MidBaseA[Derived] MidBaseB[Derived]"},
+	{name: "(DSH) diamond and shaft inheritance", code: "$TopBase[BaseA, BaseB] BaseA[Derived] BaseB[Derived] $BaseX[BaseB]"},
+])
+
+tab.AddTab("Extended", [
+	{name: "(SISL-BV) SISL base virtual", code: "$Base///v[Derived]"},
+	{name: "(SISL-BA) SISL base abstract", code: "$Base///a[Derived]"},
+	{name: "(SIML-R) SIML reabstraction", code: "$TopBase///a[MidBase] MidBase///v[LowBase] LowBase///a[Derived]"},
+	{name: "(DSL-V) all virtual", code: "$TopBase///v[BaseA, BaseB] BaseA///v[Derived] BaseB///v[Derived///v]"},
+	{name: "(DSL-A) top virtual", code: "$TopBase///v[BaseA, BaseB] BaseA[Derived] BaseB[Derived]"},
+	{name: "(DSL-A) top abstract all virtual", code: "$TopBase///a[BaseA, BaseB] BaseA///v[Derived] BaseB///v[Derived///v]"},
+])
+
+tab.AddTab("Invalid", [
+	{name: "(SISL) base plain derived plain", code: "$Base///m[Derived///m]"},
+	{name: "(SISL-BV) derived plain", code: "$Base///v[Derived///m]"},
+	{name: "(SISL-BA) derived plain", code: "$Base///a[Derived]"},
+	{name: "(MISL) both base plain", code: "$BaseA///m[Derived] $BaseB///m[Derived]"},
+	{name: "(MISL) base plain base virtual", code: "$BaseA///v[Derived] $BaseB///m[Derived]"},
+	{name: "(MISL) both base virtual", code: "$BaseA///v[Derived] $BaseB///v[Derived]"},
+	{name: "(DSL-V) base virtual", code: "$TopBase///v[BaseA, BaseB] BaseA///v[Derived] BaseB///v[Derived]"},
+	{name: "(DSL-V) top virtual base virtual", code: "$TopBase///v[BaseA, BaseB] BaseA[Derived] BaseB///v[Derived]"},
+	{name: "(DSL-A) base virtual", code: "$TopBase///a[BaseA, BaseB] BaseA///v[Derived] BaseB///v[Derived]"},
+	{name: "Triangle", code: "$TopBase[MidBase, Right] MidBase[Left, Right],"},
+	{name: "DisplayedTask", code: "$Link[Displayed] $.Link[Task] Displayed[Disp_Task] Task[Disp_Task]"}
+])
+
+tab.AddTab("Miscellaneous", [
+	{name: "Default", code: "$Top///a[MidA,MidB] MidA///v[Der] MidB[Der]"},
+	{name: "Mermaid", code: "$Animal///a[Human, Fish, Android] Human///v[Mermaid, PG13Woman]  PG13Woman[Disney] Fish///v[Mermaid] +Mermaid///a[Heavenly///x, +Hellish///x, ++Westworld///x, +Shud///x, Disney///x] Android///v[Westworld]"},
+])
+
+tab.ActivatePanel(0)
+
+canvas = document.createElement("canvas");
+canvas.style.border = "1px solid gray"
+canvas.height = 350;
+canvas.width = 430;
+document.getElementById("diagram").appendChild(canvas)
+
+Painter = PainterLib.GetObjectDef("Painter")
+painter = Painter.New(canvas)
+
+H = canvas.parentElement.offsetHeight;
+if(H < tabelem.parentElement.offsetHeight)
+	H = tabelem.parentElement.offsetHeight;
+tabelem.parentElement.style.height = H+"px";
+canvas.height = H;
+tree = AppHierTree.New(canvas.offsetWidth, "$Top///a[MidA,MidB] MidA///v[Der] MidB[Der]")
+tree.Paint(painter)
+
+document.getElementById("draw-script").onclick = function(){
+	tree.Reset(scriptBox.value, painter)
+	tab.ResetCurrSel();
+}
+
+document.getElementById("add-script").onclick = function(){
+	tab.AddUserScript(scriptBox.value);
+	tree.Reset(scriptBox.value, painter)
+}
+
+document.getElementById("update-script").onclick = function(){
+	tab.UpdateUserScript(scriptBox.value);
+	tree.Reset(scriptBox.value, painter)
+}
+
+document.getElementById("remove-script").onclick = function(){
+	tab.RemoveUserScript();
+}
+
+document.getElementById("clear-script").onclick = function(){
+	scriptBox.value = "";
+}
+
+scriptBox.addEventListener("keypress", function(e){
+	var code = e.which || e.keyCode;
+	if(e.ctrlKey && code == 13){
+		tree.Reset(scriptBox.value, painter)
+		tab.ResetCurrSel();
+	}
+})
+
+</script>
+</html>
