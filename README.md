@@ -1,28 +1,85 @@
 # JEEP
 
-JEEP is an ambitious framework intended to impart features to JavaScript that enables robust software engineering by bringing object orientation to JavaScript beyond what is available in the language natively. With Jeep, it becomes easy to create reusable, customizable and extensible components of complex structure and behavior compared what can be done with plain JavaScript code. It is a C++ inspired framework that tries to make JavaScript look, feel and behave like C++, but fear not, it only imports the best features.  
+JEEP is an ambitious framework intended to impart features to JavaScript that enables robust software engineering by bringing object orientation to JavaScript beyond what is available in the language natively. Jeep makes it easy to create reusable, customizable and extensible components of complex structure and behavior compared what can be done with plain JavaScript code. It is a C++ inspired framework that tries to make JavaScript look, feel and behave like C++ for most part, but fear not, it only imports the best features.  
 
 ## Features
 
-Jeep has a host of features and they all revolve around structure and semantics. As a result, it promotes writing readable code and is very strict in enforcing a set of rules. It tries to deliver all this with minimum overhead, and sometimes with none at all. It is a complex framework, but one that is easy to use, and cannot be effectively described in a small text file such as this. Hence a 120+ page pdf document exists that discusses the framework in detail.
+Jeep has a host of features and they all revolve around structure and semantics. As a result, it promotes writing readable code and is very strict in enforcing a set of rules. It tries to deliver all this with minimum overhead, and sometimes with none at all. It is a complex framework, but one that is easy to use, and cannot be effectively described in a small text file such as this by simply mentioning a feature name accompanied by a two line throwaway code. Hence a 120+ page pdf document exists that discusses the framework in detail.
 
 For simplicity, the features are reduced to these two lists
 
 ### Qualitative
-* robustness
-* maintainable and extensible classes
-* intuitive class description
-* improved productivity and performance
+- enforces syntax and semantic rules strictly and imparts robustness to code
+- promotes writing intuitive, readable and easily extensible code
+- allows code to be highly structured and organized
+- improves productivity and performance
 
 ### Technical
-* single and multiple inheritance
-* constructor and destructor
-* virtual and abstract functions
-* development mode and production mode split
+- offers a range of objects to help model data and behavior appropriately
+- allows member with public, protected and private access restriction
+- allows member variables and functions to be constant
+- allows a series of validation on functions such as argument types, count etc
+- allows single and multiple inheritance with virtual and abstract functions
+- provides development mode and production modes (like debug and release build)
+- and much much more
 
-## Quick Example
+## Three Quick Examples
 
-The image is a screen shot of a simple demonstration application created using Jeep that helps visualize hierarchies. It shows a Mermaid class. The code follows after it. 
+### Access Restriction
+
+``` javascript
+let Class = DemoEnv.CreateClassDef("Class", {
+    PUBLIC: {
+        pubval: 0,
+        pubfunc: function(){
+            cout("pubval:", this.pubval, "protval:", this.protval, "privval:", this.privval)
+        },
+    },
+    PROTECTED: {
+        protval: 100,
+    },
+    PRIVATE: {
+        privval: 200,
+    }
+})
+let c = Class.New();
+c.pubfunc();
+try{c.protval=0}catch(e){cout(e)}
+try{c.privval=0}catch(e){cout(e)}
+```
+
+```
+pubval: 0 protval: 100 privval: 200 
+JEEP: Attempt to write protected variable 'Class.protval' detected. Aborting... 
+JEEP aborted 
+JEEP: Attempt to write private variable 'Class.privval' detected. Aborting... 
+JEEP aborted
+```
+
+### Constant Function
+
+``` javascript
+let Class = DemoEnv.CreateClassDef("Class", {
+    PUBLIC: { 
+        value: 10,
+        show__const: function(x){this.value = x},
+        print: function(){cout("value:", this.value)}
+    }
+})
+let c = Class.New();
+try{c.show(33)}catch(e){cout(e)}
+c.print();
+```
+
+```
+JEEP: Attempt to change the variable 'Class.value' inside constant function detected. Call trace: [Class.show]. Aborting... 
+JEEP aborted
+value: 10
+```
+
+### Multiple Inheritance
+
+The example creates a Mermaid class as depicted in the diagram. The image is a screen shot of a simple demonstration application created using Jeep that helps visualize hierarchies.
 
 ![](https://github.com/vinayms2017/JEEP/blob/master/mermaiddemo.jpg)
 
@@ -77,7 +134,6 @@ DemoEnv.RegisterClassDef("Mermaid", {
 let Mermaid = JEEP.GetObjectDef("Mermaid");
 let m = Mermaid.New("Mermy");
 m.liveOneMoment();
-
 ```
 
 ```
