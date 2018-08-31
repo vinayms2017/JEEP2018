@@ -145,7 +145,7 @@ m.liveOneMoment();
 
 ## 4. Authors
 
-Designed and developed by Vinay.M.S. You may contact me at <prefix>.vinayms@gmail.com where <previx> is engineer.
+Designed and developed by Vinay.M.S. You may contact me at prefix.vinayms@gmail.com where prefix is engineer.
 
 ## 5. Installation
 
