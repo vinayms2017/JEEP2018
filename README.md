@@ -25,11 +25,18 @@ For simplicity, the features are reduced to these two lists
 
 ## 2. Three Quick Examples
 
-Although only classes are shown in the examples, keep in mind that there are more objects available, namely, records, structures, fields and groups.
+Although only classes are shown in the examples, keep in mind that there are more objects available, namely, records, structures, fields and groups. 
 
 ### 2.1. Access Restriction
 
 ``` javascript
+JEEP.InitFramework();
+
+let DemoEnv = JEEP.CreateEnvironment({
+    client: "jeep-aware", 
+    mode: "development-mode"
+});
+
 let Class = DemoEnv.CreateClassDef("Class", {
     PUBLIC: {
         pubval: 0,
@@ -61,6 +68,13 @@ JEEP aborted
 ### 2.2. Constant Function
 
 ``` javascript
+JEEP.InitFramework();
+
+let DemoEnv = JEEP.CreateEnvironment({
+    client: "jeep-aware", 
+    mode: "development-mode"
+});
+
 let Class = DemoEnv.CreateClassDef("Class", {
     PUBLIC: { 
         value: 10,
