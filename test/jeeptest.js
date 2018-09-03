@@ -530,6 +530,50 @@ JEEPTEST = {
 			c.print();
 			cout(c.getPrivval(), c.getProtval());
 		},
+		"class-protected-ctor": function(env, cout, info){
+			info.desc = "tests that a class with protected constructor doesn't have New and InitNew functions"
+			info.exp = ["New absent", "InitNew absent"];
+			info.aspects = "class";
+			let Class = env.CreateClassDef("Test", {
+				CONSTRUCTOR__protected: function(x){
+					cout(this.$name)
+					this.value = x;
+				},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("value =", this.value)}
+				}
+			});
+			cout("New", Class.New === undefined ? "absent" : "present")
+			cout("InitNew", Class.InitNew === undefined ? "absent" : "present")
+		},
+		"class-private-ctor": function(env, cout, info){
+			info.desc = "tests that a class with private constructor doesn't have New and InitNew functions"
+			info.exp = [
+			"New absent", "InitNew absent",
+			"Test",
+			"JEEP WARNING: The function Test.GetInstance does not expect any arguments.",
+			"JEEP: Invalid CreateInstance since the class 'Test' is already instantiated.",
+			 "value = 100",
+			];
+			info.aspects = "class";
+			let Class = env.CreateClassDef("Test", {
+				CONSTRUCTOR__private: function(x){
+					cout(this.$name)
+					this.value = x;
+				},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("value =", this.value)}
+				}
+			});
+			cout("New", Class.New === undefined ? "absent" : "present")
+			cout("InitNew", Class.InitNew === undefined ? "absent" : "present")
+			let c = Class.CreateInstance(100);
+			c = Class.GetInstance(33);
+			try{c = Class.CreateInstance(200);}catch(e){cout(e)}
+			c.print();
+		},
 		"class-copy-constructor-basic": function(env, cout, info){
 			info.desc = "tests copy construction mechanism for class"
 			info.exp = ["CONSTRUCTOR 20","value = 20", "value = 100"];
@@ -901,6 +945,115 @@ JEEPTEST = {
 			});
 			let d = Derived.New();
 			d.dprint();
+		},
+		"class-single-inheritance-protected-ctor": function(env, cout, info){
+			info.desc = "tests that protected constructor"
+			info.exp = ["New absent", "InitNew absent"];
+			info.aspects = "class, inheritance";
+			let TopBase = env.CreateClassDef("TopBase", {
+				CONSTRUCTOR__protected: function(){cout("TopBase CONSTRUCTOR")},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("TopBase value:", this.value)}
+				}
+			});
+			let MidBase = env.CreateClassDef("MidBase", {
+				EXTENDS: [TopBase],
+				PUBLIC: {
+					mvalue: 10,
+					mprint: function(){
+						this.print();
+						cout("MidBase value:", this.dvalue)
+					}
+				}
+			});
+			let Derived = env.CreateClassDef("Derived", {
+				EXTENDS: [MidBase],
+				PUBLIC: {
+					dvalue: 10,
+					dprint: function(){
+						this.mprint();
+						cout("Derived value:", this.dvalue)
+					}
+				}
+			});
+			cout("New", Derived.New === undefined ? "absent" : "present")
+			cout("InitNew", Derived.InitNew === undefined ? "absent" : "present")
+		},
+		"class-single-inheritance-protected-ctor2": function(env, cout, info){
+			info.desc = "tests that single inheritance works unaffected with protected base constructor"
+			info.exp = ["TopBase CONSTRUCTOR", "MidBase CONSTRUCTOR", "Derived CONSTRUCTOR", "TopBase value: 10", "MidBase value: 10", "Derived value: 10"];
+			info.aspects = "class, inheritance";
+			let TopBase = env.CreateClassDef("TopBase", {
+				CONSTRUCTOR__protected: function(){cout("TopBase CONSTRUCTOR")},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("TopBase value:", this.value)}
+				}
+			});
+			let MidBase = env.CreateClassDef("MidBase", {
+				EXTENDS: [TopBase],
+				CONSTRUCTOR: function(){cout("MidBase CONSTRUCTOR")},
+				PUBLIC: {
+					mvalue: 10,
+					mprint: function(){
+						this.print();
+						cout("MidBase value:", this.dvalue)
+					}
+				}
+			});
+			let Derived = env.CreateClassDef("Derived", {
+				EXTENDS: [MidBase],
+				CONSTRUCTOR: function(){cout("Derived CONSTRUCTOR")},
+				PUBLIC: {
+					dvalue: 10,
+					dprint: function(){
+						this.mprint();
+						cout("Derived value:", this.dvalue)
+					}
+				}
+			});
+			let d = Derived.New();
+			d.dprint();
+		},
+		"class-single-inheritance-protected-private-ctor": function(env, cout, info){
+			info.desc = "tests that protected constructor"
+			info.exp = [
+			"New absent", "InitNew absent",
+			"TopBase CONSTRUCTOR", "Derived CONSTRUCTOR",
+			];
+			info.aspects = "class, inheritance";
+			let TopBase = env.CreateClassDef("TopBase", {
+				CONSTRUCTOR__protected: function(){cout("TopBase CONSTRUCTOR")},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("TopBase value:", this.value)}
+				}
+			});
+			let MidBase = env.CreateClassDef("MidBase", {
+				EXTENDS: [TopBase],
+				PUBLIC: {
+					mvalue: 10,
+					mprint: function(){
+						this.print();
+						cout("MidBase value:", this.dvalue)
+					}
+				}
+			});
+			let Derived = env.CreateClassDef("Derived", {
+				EXTENDS: [MidBase],
+				CONSTRUCTOR__private: function(){cout("Derived CONSTRUCTOR")},
+				PUBLIC: {
+					dvalue: 10,
+					dprint: function(){
+						this.mprint();
+						cout("Derived value:", this.dvalue)
+					}
+				}
+			});
+			cout("New", Derived.New === undefined ? "absent" : "present")
+			cout("InitNew", Derived.InitNew === undefined ? "absent" : "present")
+			Derived.CreateInstance();
 		},
 		"class-check-instanceof-single-inheritance": function(env, cout, info){
 			info.desc = "tests the single inheritance setup with public members and constructors (TopBase, MidBase and Derived)"
@@ -1434,6 +1587,38 @@ JEEPTEST = {
 			let c = Derived.New();
 			let TopBase = JEEP.GetObjectDef("TopBase")
 			cout("c instance of TopBase:", TopBase.InstanceOf(c)?"true":"false")
+		},
+		"class-wrapper-protected-ctor": function(env, cout, info){
+			info.desc = "tests the single inheritance setup with public members and constructors (TopBase, MidBase and Derived)"
+			info.exp = ["New absent", "InitNew absent"];
+			info.aspects = "class, inheritance";
+			env.RegisterClassDef("TopBase", {
+				CONSTRUCTOR__protected: function(){},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("TopBase value:", this.value)}
+				}
+			});
+			let Wrapper = env.CreateClassWrapper("TopBase", {
+				Functions: {
+					"print": "show"
+				},
+				Variables: {
+					"value": "number"
+				}
+			})
+			let Derived = env.CreateClassDef("Derived", {
+				EXTENDS: [Wrapper],
+				PUBLIC: {
+					dvalue: 10,
+					dprint: function(){
+						this.mprint();
+						cout("Derived value:", this.dvalue)
+					}
+				}
+			});
+			cout("New", Derived.New === undefined ? "absent" : "present")
+			cout("InitNew", Derived.InitNew === undefined ? "absent" : "present")
 		},
 		"class-wrapper-with-virtual": function(env, cout, info){
 			info.desc = "tests the wrapper mechanism with private virtual functions with a simple one level single inheritance",
@@ -3401,7 +3586,7 @@ JEEPTEST = {
 			if(env.IsDevMode())
 				info.exp = [
 					"JEEP: Compilation found 1 error(s) for class 'Test'.",
-					"1. Constructor can only have 'managed' directive.",
+					"1. Constructor can only have 'managed,protected,private' directive.",
 					"JEEP aborted.",
 					"ok"
 				];
@@ -3411,6 +3596,53 @@ JEEPTEST = {
 			try{
 			let Class = env.CreateClassDef("Test", {
 				CONSTRUCTOR__const: function(){},
+				PUBLIC: {
+					dummyvar: 0,
+					dummyfunc: function(){},
+				}
+			});
+			}catch(e){cout(e)}
+			cout("ok")
+		},
+		"syntax-class-constructor-directive-privprot": function(env, cout, info){
+			info.desc = "tests constructor with both protected and private directives"
+			if(env.IsDevMode())
+				info.exp = [
+					"JEEP: Compilation found 1 error(s) for class 'Test'.",
+					"1. Constructor cannot have both 'protected' and 'private' directives.",
+					"JEEP aborted.",
+					"ok"
+				];
+			else
+				info.exp = ["ok"]
+			info.aspects = "class, function directive";
+			try{
+			let Class = env.CreateClassDef("Test", {
+				CONSTRUCTOR__protected_private: function(){},
+				PUBLIC: {
+					dummyvar: 0,
+					dummyfunc: function(){},
+				}
+			});
+			}catch(e){cout(e)}
+			cout("ok")
+		},
+		"syntax-class-constructor-directive-privmanaged": function(env, cout, info){
+			info.desc = "tests constructor with both managed and private directives"
+			if(env.IsDevMode())
+				info.exp = [
+					"JEEP: Compilation found 1 error(s) for class 'Test'.",
+					"1. Constructor cannot have both 'managed' and 'private' directives.",
+					"JEEP aborted.",
+					"ok"
+				];
+			else
+				info.exp = ["ok"]
+			info.aspects = "class, function directive";
+			try{
+			let Class = env.CreateClassDef("Test", {
+				CONSTRUCTOR__managed_private: function(){},
+				DESTRUCTOR: function(){},
 				PUBLIC: {
 					dummyvar: 0,
 					dummyfunc: function(){},
@@ -3694,6 +3926,36 @@ JEEPTEST = {
 			}catch(e){cout(e)}
 			if(!env.IsDevMode())cout("ok")
 		},
+		"class-single-inheritance-private-ctor": function(env, cout, info){
+			info.desc = "tests that single inheritance with private base won't happen";
+			if(env.IsDevMode())
+				info.exp = [
+				"JEEP: Compilation found 1 error(s) for class 'MidBase'.",
+				"1. The constructor is declared private in these base classes: 'TopBase'.",
+				"JEEP aborted."
+				];
+			else
+				info.exp = ["ok"]
+			info.aspects = "class, inheritance";
+			let TopBase = env.CreateClassDef("TopBase", {
+				CONSTRUCTOR__private: function(){cout("TopBase CONSTRUCTOR")},
+				PUBLIC: {
+					valuea: 10,
+					printa: function(){cout("TopBase value:", this.value)}
+				}
+			});
+			try{
+			env.CreateClassDef("MidBase", {
+				EXTENDS: [TopBase],
+				CONSTRUCTOR: function(){cout("MidBase CONSTRUCTOR")},
+				PUBLIC: {
+					value: 10,
+					print: function(){cout("TopBase value:", this.value)}
+				}
+			});
+			}catch(e){cout(e)}
+			if(!env.IsDevMode())cout("ok")
+		},
 		"class-single-inheritance-dupnames": function(env, cout, info){
 			info.desc = "tests the single inheritance setup with public members and constructors (TopBase, MidBase and Derived)"
 			if(env.IsDevMode())
@@ -3952,6 +4214,42 @@ JEEPTEST = {
 			env.RegisterClassDef("TopBase", {
 				CONSTRUCTOR__managed: function(x){this.value = x},
 				DESTRUCTOR: function(){},
+				PUBLIC: {
+					value: 37,
+					start: function(x){this.perform(x)},
+					perform: function(x){cout("performing", x, this.value)},
+				}
+			});
+			let Wrapper = env.CreateClassWrapper("TopBase", {
+				Functions: {
+					"perform": "runTasks"
+				},
+				Variables: {
+					"value": "number"
+				}
+			})
+			try{let Derived = env.CreateClassDef("Derived", {
+				EXTENDS: [Wrapper],
+				CONSTRUCTOR: function(x){this.number *= 2},
+				PUBLIC: {
+					work: function(x){cout("working", x, this.number)},
+				}
+			})}catch(e){cout(e)}
+			if(!env.IsDevMode())cout("ok")
+		},
+		"class-wrapper-ctor-private": function(env, cout, info){
+			info.desc = "tests multiple inheritance with abstract functions in single level with one base registered"
+			if(env.IsDevMode())
+				info.exp = [
+				"JEEP: Compilation found 1 error(s) for class 'Derived'.",
+				"1. The constructor is declared private in these base classes: 'TopBase'.",
+				"JEEP aborted."
+				];
+			else
+				info.exp = ["ok"]
+			info.aspects = "class, inheritance, abstract";
+			env.RegisterClassDef("TopBase", {
+				CONSTRUCTOR__private: function(x){this.value = x},
 				PUBLIC: {
 					value: 37,
 					start: function(x){this.perform(x)},
@@ -4593,7 +4891,7 @@ JEEPTEST = {
 	utils: {
 		"utils-layout": function(env, cout, info){
 			info.desc = "checks the names of all available utils";
-			info.exp = ["CopyProps,SplitTrim,MakeFlags,RecursiveFlag,ObjectIterator,FlagProcessor,MessageFormatter"],
+			info.exp = ["CopyProps,SplitTrim,MakeSequence,MakeFlags,RecursiveFlag,ObjectIterator,FlagProcessor,MessageFormatter"],
 			info.aspects = "utils";
 			cout(Object.keys(JEEP.Utils).join(','))
 		},
@@ -4641,6 +4939,25 @@ JEEPTEST = {
 			cout("input: \"" + text + "\"")
 			cout("output: \""+st.join() +"\"");
 		},
+		"utils-makesequence": function(env, cout, info){
+			info.desc = "tests MakeSequence";
+			info.exp = ["first 0", "second 1", "third 2"],
+			info.aspects = "utils";
+			let flags = JEEP.Utils.MakeSequence("test", "first, second, third")
+			let keys = Object.keys(flags)
+			for(let k = 0; k<keys.length; k++)
+				cout(keys[k], flags[keys[k]])
+		},
+		"utils-makesequence-dupnames": function(env, cout, info){
+			info.desc = "tests MakeSequence";
+			if(env.IsDevMode())
+				info.exp = ["JEEP: The sequence 'Test' has repeated names 'f,g'."];
+			else
+				info.exp = ["ok"];
+			info.aspects = "utils";
+			try{JEEP.Utils.MakeSequence("Test", "f,g,f,g,f", env)}catch(e){cout(e)}
+			if(!env.IsDevMode())cout("ok")
+		},
 		"utils-makeflags": function(env, cout, info){
 			info.desc = "tests MakeFlags";
 			info.exp = ["first 1", "second 2", "third 4"],
@@ -4666,7 +4983,7 @@ JEEPTEST = {
 		"utils-makeflags-dupnames": function(env, cout, info){
 			info.desc = "tests MakeFlags";
 			if(env.IsDevMode())
-				info.exp = ["JEEP: The flag 'Test' has repeated flag names 'f,g'."];
+				info.exp = ["JEEP: The flag 'Test' has repeated names 'f,g'."];
 			else
 				info.exp = ["ok"];
 			info.aspects = "utils";
