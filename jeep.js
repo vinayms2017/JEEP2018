@@ -561,7 +561,6 @@ JEEP = {
 			// helpers because they won't be called in production mode, which messes up the setting of
 			// managed mechanism.
 			let ctorInfo = this.getCtor("class", env, def);
-			let managed = false;
 			if(ctorInfo){
 				if(piggy == "group"){
 					if(devmode && ctorInfo.undec.decflags != 0)
@@ -569,7 +568,7 @@ JEEP = {
 				}
 				else {
 					def.CONSTRUCTOR = ctorInfo.ctor
-					managed = (ctorInfo.undec.decflags & this.fxFlags.managed);
+					let managed = (ctorInfo.undec.decflags & this.fxFlags.managed);
 					if(managed && !def.DESTRUCTOR)					
 						this.addSyntaxError("managed-dtor-absent", {})
 					if(!managed && def.DESTRUCTOR)					
@@ -577,7 +576,7 @@ JEEP = {
 				}
 			}
 			return this.generateClassDef({name: name, desc: def, env: env, 
-				vars: vars, funcs: funcs, managed: managed,
+				vars: vars, funcs: funcs, flags: ctorInfo ? ctorInfo.undec.decflags : 0,
 				vfuncs: Object.keys(virtualFuncs).length > 0 ? virtualFuncs : null,
 				staticMembers: Object.keys(staticMembers).length > 0 ? staticMembers : null,
 			})
@@ -607,6 +606,16 @@ JEEP = {
 		preValidateClassDef: function(classDef){
 			if(classDef.dtor && !classDef.ctor)
 				this.addSyntaxError("dtor-no-ctor", {})
+			if(classDef.flatBaseDefs){
+				let err = "";
+				for(let k = 0; k<classDef.flatBaseDefs.length; k++){
+					let b = classDef.flatBaseDefs[k];
+					if(b.flags & this.fxFlags.private)
+						err += ","+b.$name;
+				}
+				if(err.length > 0)
+					this.addSyntaxError("base-ctor-private", {bases: err.substring(1)})
+			}
 		},
 		postValidateClassDef: function(classDef){
 			if(Object.keys(classDef.vars).length == 0)
@@ -865,8 +874,10 @@ JEEP = {
 					}
 				}
 				
+				let protctor = false;
 				for(let k = 0; k<flatBaseDefs.length; k++){
 					let bd = flatBaseDefs[k];
+					protctor |= (bd.flags & this.fxFlags.protected);
 					if(bd.vfuncs){
 						bvfmap[bd.$name] = bd.vfuncs;
 						let iter = this.fx.Utils.ObjectIterator.New(bd.vfuncs);
@@ -878,6 +889,11 @@ JEEP = {
 					this.mergeBaseClass(bd, classDef, k+1);
 					this.merge(bd.baseVFuncs, bvfmap);
 					classDef.wrapperInits = classDef.wrapperInits.concat(bd.wrapperInits);
+				}
+				if(protctor && !classDef.ctor){
+					classDef.flags |= this.fxFlags.protected;
+					delete Class.New;
+					delete Class.InitNew;
 				}
 				
 				if(Object.keys(bvfmap).length > 0){
@@ -1105,8 +1121,7 @@ JEEP = {
 			jdef.funcs = info.funcs;
 			jdef.vfuncs = info.vfuncs;
 			jdef.staticMembers = info.staticMembers;
-			if(info.managed)
-				jdef.flags |= this.fxFlags.managed;
+			jdef.flags |= info.flags
 			jdef.pmc = this.getPMCFlags(info.env, jdef.pmc);			
 			let staticSentinelRef = this.setupClassDef(info.env, info.name, Class, jdef);
 			return {Class: Class, staticSentinelRef: staticSentinelRef};
@@ -1154,19 +1169,35 @@ JEEP = {
 				Object.seal(inst);
 				return inst;
 			}
-			Class.New = function(){
-				if(arguments.length > 0 && jdef.ctorlist.length == 0)
-					impl.abort("new-noctor", {name: name, type: "class"})
-				return Instantiate(false, arguments)
-			},
-			Class.InitNew = function(){
-				if((!env || env.IsDevMode())){
-					if(arguments.length === 0)
-						impl.abort("initnew-noargs", {name: name, type: "class"})
-					if(arguments.length !== 1)
-						impl.abort("initnew-moreargs", {name: name, type:"class"})
+			if(!(jdef.flags & (this.fxFlags.protected|this.fxFlags.private))){
+				Class.New = function(){
+					if(arguments.length > 0 && jdef.ctorlist.length == 0)
+						impl.abort("new-noctor", {name: name, type: "class"})
+					return Instantiate(false, arguments)
+				},
+				Class.InitNew = function(){
+					if((!env || env.IsDevMode())){
+						if(arguments.length === 0)
+							impl.abort("initnew-noargs", {name: name, type: "class"})
+						if(arguments.length !== 1)
+							impl.abort("initnew-moreargs", {name: name, type:"class"})
+					}
+					return Instantiate(true, arguments)
 				}
-				return Instantiate(true, arguments)
+			}
+			if(jdef.flags & this.fxFlags.private){
+				let privinst = null;
+				Class.CreateInstance = function(){
+					if(privinst)
+						impl.abort("createinstance-dup", {name: Class.$name})
+					privinst = Instantiate(false, arguments);
+					return privinst;
+				}
+				Class.GetInstance = function(){
+					if(privinst && (arguments.length > 0))
+						impl.showWarning("getinstance-args", {name: Class.$name})
+					return privinst;
+				}
 			}
 			Class.InstanceOf = function(other){
 				if(!other._jeepdef_)
@@ -2385,8 +2416,14 @@ JEEP = {
 						if(flags != 0)
 							this.addSyntaxError("invalid-ctor-directives", {});
 					}
-					else if((flags != 0) && !(flags & this.fxFlags.managed))
-						this.addSyntaxError("invalid-ctor-directives", {});
+					else {
+						if((flags != 0) && !(flags & (this.fxFlags.managed|this.fxFlags.protected|this.fxFlags.private)))
+							this.addSyntaxError("invalid-ctor-directives", {});
+						if((flags & this.fxFlags.protected) && (flags & this.fxFlags.private))
+							this.addSyntaxError("invalid-ctor-directives-privprot", {});
+						if((flags & this.fxFlags.managed) && (flags & this.fxFlags.private))
+							this.addSyntaxError("invalid-ctor-directives-privmanaged", {});
+					}
 					break;
 			}
 			return true;
@@ -2639,6 +2676,23 @@ JEEP = {
 
 			utils.SplitTrim = this.splitTrim;
 
+			utils.MakeSequence = function(id, fnames, env){
+				let narr = this.SplitTrim(fnames);
+				let devmode = env && env.IsDevMode();
+				let ret = {};
+				let err = "";
+				for(let k = 0; k<narr.length; k++){
+					if(devmode && (ret[narr[k]] !== undefined)){
+						if(err.indexOf(narr[k]) < 0)
+							err += ","+narr[k]
+					}
+					ret[narr[k]] = k;
+				}
+				if(err.length > 0)
+					impl.abort("seq-flag-dupnames", {type: "sequence", fname: id, dupnames: err.substring(1)});
+				return ret;
+			}
+
 			utils.MakeFlags = function(id, fnames, env){
 				let narr = this.SplitTrim(fnames);
 				let ret = {};
@@ -2656,7 +2710,7 @@ JEEP = {
 					flag *= 2;
 				}
 				if(err.length > 0)
-					impl.abort("flags-dupnames", {fname: id, dupnames: err.substring(1)});
+					impl.abort("seq-flag-dupnames", {type: "flag", fname: id, dupnames: err.substring(1)});
 				return ret;
 			}
 
@@ -2673,7 +2727,7 @@ JEEP = {
 			// This map will be used when structure is not yet defined at the framework level, which obviously 
 			// includes processing structure code itself, because utils.MessageProcessor is a structure.
 			this.preStructMsgMap = this.fmtProcSetup({
-				"flags-dupnames": "The flag '$fname$' has repeated flag names '$dupnames$'.",
+				"seq-flag-dupnames": "The $type$ '$fname$' has repeated names '$dupnames$'.",
 				"flags-overflow": "Generating 32 or more flags ($fname$) might cause overflow on your machine.",
 				"initnew-fail": "The InitNew construction for the $type$ '$name$' failed due to unregistered names being mentioned [$errnames$].",
 				"invalid-name": "The $type$ name '$name$' is invalid since it contains non alphanumeric characters.",
@@ -2889,11 +2943,12 @@ JEEP = {
 				"argnum-fail": "The function '$func$' was invoked with wrong argument count (declared: $declared$, given: $given$).",
 				"argtype-count": "The function '$func$' with the 'argtype' directive has mismatched argument count.",
 				"argtype-fail": "The function '$func$' was invoked with wrong argument types '$args$'.",
-				"argtype-syntax": "The function '$func$' with the 'argtype' directive doesn't have the correct function definition.",
 				"argtype-names": "The function '$func$' with the 'argtype' directive has mismatched argument names.",
 				"argtype-notype": "The function '$func$' with the 'argtype' directive should have at least one typed argument.",
+				"argtype-syntax": "The function '$func$' with the 'argtype' directive doesn't have the correct function definition.",
 				"argtype-types": "The function '$func$' with the 'argtype' directive declares multiple types for arguments ($args$).",
 				"argtype-unreg": "The argument type '$type$' for the function '$func$' is unregistered.",
+				"base-ctor-private": "The constructor is declared private in these base classes: '$bases$'.",
 				"class-group-empty": "A $type$ should have $mem$.",
 				"const-func-change-detected": "Attempt to change the variable '$name$' inside constant function detected. Call trace: $trace$.",
 				"const-var-change-detected": "Attempt to change constant variables '$names$' detected. Call trace: $trace$.",
@@ -2901,6 +2956,7 @@ JEEP = {
 				"const-var-set-detected-ext": "Attempt to change constant variable '$name$' by non member function detected.",
 				"constructor-failure-ex": "The class '$name$' could not be instantiated as the constructor raised the exception '$ex$'.",
 				"constructor-failure-ret": "The class '$name$' could not be instantiated. Reason: $reason$.",
+				"createinstance-dup": "Invalid CreateInstance since the class '$name$' is already instantiated.",
 				"ctor-nomanage": "The constructor should be declared 'managed' since the base class does so.",
 				"def-unregistered": "GetObjectDef for '$name$' failed since no object by that name was found.",
 				"destructor-exception": "DESTRUCTOR THROWING EXCEPTION IS A SERIOUS STRUCTURAL ERROR.",
@@ -2915,20 +2971,23 @@ JEEP = {
 				"field-unregistered": "The field '$name$' is not registered.",
 				"func-directive-combo": "The function '$name$' has the directive combination '$combo$' set which is invalid.",
 				"get-set-clash": "The function '$fname$' cannot be generated for the variable '$vname$' since a function by that name already exists.",
+				"getinstance-args": "The function $name$.GetInstance does not expect any arguments.",
 				"group-ctor-directives": "A group cannot have constructor with directives.",
 				"hierarchy-dupname": "The $memtype$ '$name$' is found in multiple places in the hierarchy '$owners$'.",
 				"initnew-moreargs": "The $type$ '$name$' was instantiated with InitNew with more than one argument meant for initialiation.",
 				"initnew-noargs": "The $type$ '$name$' was instantiated with InitNew but without arguments meant for initialiation.",
 				"inst-new": "$type$ '$name$' cannot be instantiated with the new operator. Use New or InitNew functions.",
 				"invalid-builder-map": "The builder '$bname$' for the library '$libname$' invoked with $api$ was supplied wrong property '$props$'.",
-				"invalid-ctor-directives": "Constructor can only have 'managed' directive.",
+				"invalid-ctor-directives": "Constructor can only have 'managed,protected,private' directive.",
+				"invalid-ctor-directives-privmanaged": "Constructor cannot have both 'managed' and 'private' directives.",
+				"invalid-ctor-directives-privprot": "Constructor cannot have both 'protected' and 'private' directives.",
 				"invalid-directive": "The $type$ '$name$' uses invalid directive(s) '$invalid$'.",
 				"invalid-env-desc": "CreateEnvironment should be given 'mode' and 'client' explicitly.",
 				"invalid-env-prop": "CreateEnvironment was called with invalid $prop$ '$propval$'.",
 				"invalid-virtual-call": "Invoking virtual function '$fname$' in the $caller$ detected.",
-				"library-duplicate": "Registering the library '$name$' failed since there is already a library by that name registered.",
 				"library-absent": "The builder '$bname$' could not be registered since the library '$name$' was not found.",
 				"library-builder-absent": "The builder '$bname$' for the library '$libname$' was not found.",
+				"library-duplicate": "Registering the library '$name$' failed since there is already a library by that name registered.",
 				"library-unregistered": "Unable to get the library '$name$' since it is not registered.",
 				"managed-dtor-absent": "Destructor should be defined for a class declared as 'managed'.",
 				"managed-dtor-nomanage": "Destructor should be defined only for a class declared as 'managed'.",
@@ -2938,10 +2997,10 @@ JEEP = {
 				"member-varfunc": "The member '$name$' is declared as both variable and function.",
 				"namespace-flatten-duplicate": "The namespace cannot be flattened due to duplicate branch names ($names$).",
 				"namespace-partition-duplicate": "The namespace already has these partitions '$parts$'.",
+				"new-noctor": "Instantiation of $type$ '$name$' with New with arguments is invalid since there is no constructor. Use InitNew instead or define a constructor.",
 				"pmc-invalid": "PMC contains invalid flags.",
 				"pmc-nonstring": "PMC should be a comma separated string.",
 				"pmc-unknown": "PMC contains unknown flag(s) '$flags$'.",
-				"new-noctor": "Instantiation of $type$ '$name$' with New with arguments is invalid since there is no constructor. Use InitNew instead or define a constructor.",
 				"reserved-name": "The word '$name$' is reserved and hence cannot be used to declare a $type$.",
 				"restricted-access": "Attempt to $access$ $spectype$ $memtype$ '$name$' detected.",
 				"restricted-access-derived": "Attempt to $access$ base class $spectype$ $memtype$ '$name$' from derived class function detected. Call trace: $trace$.",
@@ -3069,7 +3128,7 @@ JEEP = {
 
 		errors: [],
 		namespaceCounter: 0,
-		rxEmptyFunc: /function\s*\([\w_$]*\)\s*\{\s*\}/,
+		rxEmptyFunc: /function\s*\([\w_,\s]*\)\s*\{\s*\}/,
 		rxArgFuncSyntax: /function\s*(\w*)\s*\(([\w_$, ]*)\)\s*\{\s*return\s*function\s*\(([\w, ]*)\)\s*\{[\s\w\W]*\}\s*\}/,
 		reservedWords: "public,protected,private,static,constant," + 
 				"abstract,virtual,managed,argconst,argnum,argnumvar,argtype," + 
