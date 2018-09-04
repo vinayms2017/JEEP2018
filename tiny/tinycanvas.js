@@ -2,85 +2,95 @@
 // Usable subject to MIT license
 
 JEEP.RegisterLibrary("TinyCanvas", function(){
-	this.namespace.RegisterStructDef("Point", {
-		x: 0, 
+	let env = this.namespace.GetEnvironment();
+	let Item = env.CreateRecordDef("Item", {
+		x: 0,
 		y: 0,
-		GetDistanceFrom: function(other){
-			if(!this.$def.InstanceOf(other))
-				return null;
-			return {width: Math.abs(this.x - other.x), height: Math.abs(this.y-other.y)}
-		}
 	})
-
-	this.namespace.RegisterRecordDef("TextProperty", {
+	this.namespace.RegisterRecordDef("Line", {
+		xa: 0,
+		ya: 0,
+		xb: 0,
+		yb: 0,
+		color: ""
+	})
+	this.namespace.RegisterRecordDef("Rectangle", {
+		EXTENDS: [Item],
+		width: 0,
+		height: 0,
+		fillColor: "",
+		lineColor: "",
+	})
+	this.namespace.RegisterRecordDef("Text", {
+		EXTENDS: [Item],
+		content: "",
 		font: "14pt Verdana",
 		color: "black",
 		align: "center",
-		boundHeight: 0,
 	})
-	
-	let TextProp = this.namespace.GetObjectDef("TextProperty");
 
-	this.namespace.RegisterClassDef("CanvasXY", {
+	this.namespace.RegisterClassDef("Painter", {
 		CONSTRUCTOR: function(canvas){
 			this.canvasElement = canvas || document.createElement("canvas");
-			this.canvasElement.style.border = "1px solid gray"
 			this.ctx = this.canvasElement.getContext('2d');
 		},
 		PUBLIC: {
-			canvasElement__get: null,
-
-			Clear: function(){
+			Reset: function(){
 				this.ctx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height)
 			},
-			DrawLine: function(start, end, color){
-				if(color) this.saveProps()
-				if(color) this.ctx.strokeStyle = color;
+			Scale: function(x, y){
+				this.ctx.scale(x*.75,y*.75*.5)
+			},
+			DrawLine: function(line){
+				if(line.color){
+					this.saveProps()
+					this.ctx.strokeStyle = line.color;
+				}
 				this.ctx.beginPath();
-				this.ctx.moveTo(start.x, start.y)
-				this.ctx.lineTo(end.x, end.y)
+				this.ctx.moveTo(line.xa, line.ya)
+				this.ctx.lineTo(line.xb, line.yb)
 				this.ctx.stroke();
 				this.ctx.closePath();
-				if(color) this.restoreProps()
+				if(line.color) 
+					this.restoreProps()
 			},
-			DrawBox: function(topleft, rightbottom, color){
-				if(color) this.saveProps()
-				let distance = topleft.GetDistanceFrom(rightbottom)
-				if(color){
-					this.ctx.fillStyle = color;
-					this.ctx.fillRect(topleft.x, topleft.y, distance.width, distance.height)
+			DrawRectangle: function(rect){
+				if(rect.fillColor || rect.lineColor) 
+					this.saveProps()
+				if(rect.fillColor){
+					this.ctx.fillStyle = rect.fillColor;
+					this.ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
 				}
 				else{
-					this.ctx.strokeRect(topleft.x, topleft.y, distance.width, distance.height)
+					this.ctx.strokeRect(rect.x, rect.y, rect.width, rect.height)
 				}
-				if(color) this.restoreProps()
+				if(rect.fillColor || rect.lineColor)
+				 this.restoreProps()
 			},
-			DrawText: function(at, text, prop){
-				if(prop) this.saveProps()
-				if(prop && TextProp.InstanceOf(prop)){
-					this.ctx.fillStyle = prop.color;
-					this.ctx.textAlign = prop.align;
-					this.ctx.font = prop.font;
-				}
-				let y = at.y;
-				if(prop && prop.boundHeight){
-				}
-				this.ctx.fillText(text, at.x, y);
-				if(prop) this.restoreProps()
+			DrawText: function(text){
+				if(text.color) 
+					this.saveProps()
+				this.ctx.fillStyle = text.color;
+				this.ctx.textAlign = text.align;
+				this.ctx.font = text.font;
+				this.ctx.fillText(text.content, text.x, text.y);
+				if(text.color) 
+					this.restoreProps()
 			},
-			GetTextWidth: function(text, prop){
-				if(prop) this.saveProps()
-				if(prop && TextProp.InstanceOf(prop))
-					this.ctx.font = prop.font;
-				let tm = this.ctx.measureText(text);
-				if(prop) this.restoreProps()
+			GetTextWidth: function(text){
+				this.saveProps()
+				this.ctx.textAlign = text.align;
+				this.ctx.font = text.font;
+				let tm = this.ctx.measureText(text.content);
+				this.restoreProps()
 				return tm.width;
 			}
 		},
 		PRIVATE: {
+			canvasElement__get: null,
 			ctx: null,
 			savedProps: {},
-			savedPropNames: ["strokeStyle", "fillStyle", "textAlign"],
+			savedPropNames: ["strokeStyle", "fillStyle", "textAlign", "font"],
 			saveProps: function(){
 				JEEP.Utils.CopyProps(this.ctx, this.savedProps, this.savedPropNames)
 			},

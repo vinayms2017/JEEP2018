@@ -1,0 +1,286 @@
+<html>
+<head>
+<title>Jeep Tree Visualizer</title>
+<style>
+.btn
+{
+	font-size: 14px;
+	cursor: pointer;
+	margin: 0 2px;
+}
+#app {
+	position: relative;
+	width: 100%;
+	height: 90%;
+}
+#list {
+	width: 15%;
+	height: 100%;
+	overfgood-y: auto;
+	border: 1px solid gray;
+	display: inline-block;
+	vertical-align: top;
+}
+.list-entry, .list-entry-active {
+	display: "block";
+	margin: 10px;
+	color: black;
+	cursor: pointer;
+}
+.list-entry-active {
+	color: blue;
+}
+#content-panel {
+	position: relative;
+	width: 84%;
+	height: 100%;
+	border: 1px solid gray;
+	display: inline-block;
+}
+#diagram {
+	width: 100%;
+	height: 80%;
+	display: inline-block;
+}
+#script-panel {
+	position: relative;
+	width: 100%;
+	height: 20%;
+}
+#script-buttons {
+	width: 100%;
+	background-color: lightgray;
+}
+#script-box{
+	resize: none;
+	font: 14px consolas;
+	width: 100%;
+	height: 100px;
+}
+#title {
+	background-color: teal;
+	color: white;
+	text-align: left;
+	margin: 10px 0;
+	padding: 5px;
+}
+</style>
+</head>
+<body>
+<div id=title>Jeep Tree Visualizer</div>
+<div id = "app">
+	<div id="list">
+	</div>
+	<div id="content-panel">
+		<div id="diagram"></div>
+		<div id="script-panel">
+			<div id="script-buttons">
+				<input type="checkbox" id="toggle-legend"><label class="btn">Show Legend</label>
+				<button class="btn", id="draw-script">Draw</button>
+				<button class="btn", id="add-script">Add</button>
+				<button class="btn", id="update-script">Update</button>
+				<button class="btn", id="remove-script">Remove</button>
+				<button class="btn", id="clear-script">Clear</button>
+				<input type="radio" name="layout" value="horz" id="horz-layout"><label class="btn">Horizontal</label>
+				<input type="radio" name="layout" value="vert" id="vert-layout"><label class="btn">Vertical</label>
+			</div>
+			<textarea id="script-box" spellcheck='false' id="script-box"></textarea>
+		</div>
+	</div>
+</div>
+</body>
+<script type="text/javascript" src="../jeep.js"></script>
+<script type="text/javascript" src="tinycanvas.js"></script>
+<script type="text/javascript" src="tinytree.js"></script>
+<script type="text/javascript" src="tinytreelayout.js"></script>
+<script>
+
+JEEP.InitFramework();
+Env = JEEP.CreateEnvironment({client: "jeep-aware", mode: "development-mode"})
+//Env = JEEP.CreateEnvironment({client: "jeep-aware", mode: "production-mode"})
+
+//-----------------------------------------------------------------------
+// extend the tree in TinyTree for application related logic
+//-----------------------------------------------------------------------
+
+TinyTreeLib = Env.GetLibrary("TinyTree")
+HorzLayout = TinyTreeLib.$.Layout.GetObjectDef("HorzLayout")
+VertLayout = TinyTreeLib.$.Layout.GetObjectDef("VertLayout")
+NodeColors = TinyTreeLib.GetObjectDef("NodeColors")
+
+let NodeFlags = JEEP.Utils.MakeFlags("", "none, verygood, good, interesting, bad")
+
+AppTree = Env.CreateClassDef("AppTree", {
+	EXTENDS: [TinyTreeLib.GetObjectDef("Tree")],
+	PROTECTED: {
+		GetNodeColors__virtual: function(args){	
+			let nci = NodeColors.New();	
+			let flag = NodeFlags.none;
+			switch(args){
+				case "v": flag = NodeFlags.verygood; break;
+				case "g": flag = NodeFlags.good; break;
+				case "n": flag = NodeFlags.interesting; break;
+				case "x": flag = NodeFlags.bad; break;
+			}
+			let ci = this.$static.getColors(flag);
+			nci.textColor = ci.txcolor;
+			nci.backgroundColor = ci.color;
+			return nci;
+		}
+	},
+	STATIC: {
+		GetLegend: function(){
+			let cmap = {};
+			let iter = JEEP.Utils.ObjectIterator.New(NodeFlags);
+			while(iter.GetNext()){
+				let pair = iter.GetCurrPair();
+				let t = null;
+				switch(pair.key){
+					case "none": t = "unqualified"; break;
+					case "verygood": t = "very good"; break;
+					case "good": t = "good"; break;
+					case "interesting": t = "worth considering"; break;
+					case "bad": t = "bad and to be discarded"; break;
+					default: continue;// ignore other flags
+				}
+				cmap[t] = this.getColors(pair.value).color || "white";
+			}
+			delete cmap["none"];
+			let Legend = TinyTreeLib.GetObjectDef("Legend")
+			let legend = Legend.New("Colors qualify entries as follows", cmap);
+			return legend.GetDOMElement();
+		},
+		getColors__private: function(flag){
+			switch(flag){
+				case NodeFlags.interesting: return {color: "lightblue", txcolor: "black"}; 
+				case NodeFlags.good: return {color: "#feebab", txcolor: "black"}; 
+				case NodeFlags.verygood: return {color: "#aa0000", txcolor: "white"};
+				case NodeFlags.bad: return {color: "gray", txcolor: "white"}; 
+			}
+			return {color: "", txcolor: "black"}
+		},
+	},
+});
+
+//-----------------------------------------------------------------------
+// setup application ui
+//-----------------------------------------------------------------------
+
+scriptBox = document.getElementById("script-box")
+scriptBox.style.height = (scriptBox.parentNode.offsetHeight - scriptBox.previousElementSibling.offsetHeight - 5) + "px"
+
+vert = document.getElementById("vert-layout")
+vert.checked = true;
+vert.onclick = onLayoutClick;
+document.getElementById("horz-layout").onclick = onLayoutClick
+
+canvas = document.createElement("canvas");
+diagElem = document.getElementById("diagram");
+diagElem.appendChild(canvas)
+canvas.height = diagElem.offsetHeight;
+canvas.width = diagElem.offsetWidth;
+tree = AppTree.New(canvas.offsetWidth, canvas.offsetHeight)
+
+TinyCanvasLib = Env.GetLibrary("TinyCanvas")
+Painter = TinyCanvasLib.GetObjectDef("Painter")
+painter = Painter.New(canvas)
+painter.Scale(canvas.width/canvas.width, canvas.width/canvas.height)
+
+legend = AppTree.STATIC.GetLegend();
+legend.style.position = "fixed";
+legend.style.right = "5px";
+legend.style.bottom = "5px";
+legend.style.display = "none";
+document.body.appendChild(legend);
+
+toggleLegend = document.getElementById("toggle-legend");
+toggleLegend.onclick = function(){
+	legend.style.display = this.checked ? "block" : "none"
+}
+
+function getSelectedLayout(){
+	let value = "";
+	let larr =  document.getElementsByName('layout');
+	for(let k = 0; k<larr.length; k++){
+		if(larr[k].checked){
+			value = larr[k].value;
+			break;
+		}
+	}
+	switch(value){
+		case "horz": return HorzLayout;
+		case "vert": return VertLayout;
+	}
+	return null;
+}
+
+activeEntry = null;
+counter = 0;
+list = document.getElementById("list")
+
+function render(){
+	tree.Reset(scriptBox.value, painter, getSelectedLayout())
+}
+function activateEntry(e){
+	if(activeEntry)
+		activeEntry.className = "list-entry"
+	activeEntry = e;
+	activeEntry.className = "list-entry list-entry-active";
+	scriptBox.value = activeEntry["data-script"]
+	render();
+}
+function onEntryClick(){
+	activateEntry(this);
+}
+function addEntry(){
+	let entry = document.createElement("div");
+	entry.textContent = "script "+counter++;
+	entry["data-script"] = scriptBox.value;
+	list.appendChild(entry);
+	entry.onclick = onEntryClick;
+	activateEntry(entry);
+}
+
+document.getElementById("draw-script").onclick = function(){
+	render();
+}
+
+document.getElementById("add-script").onclick = function(){
+	render();
+	if(scriptBox.value)
+		addEntry();
+}
+
+document.getElementById("update-script").onclick = function(){
+	if(activeEntry){
+		activeEntry["data-script"] = scriptBox.value
+	}
+	render();
+}
+
+document.getElementById("remove-script").onclick = function(){
+	if(activeEntry){
+		list.removeChild(activeEntry)
+		activeEntry = null;
+		scriptBox.value = "";
+		render();
+	}
+}
+
+document.getElementById("clear-script").onclick = function(){
+	scriptBox.value = "";
+}
+
+function onLayoutClick(){
+	tree.Reset(scriptBox.value, painter, getSelectedLayout())
+}
+
+scriptBox.addEventListener("keypress", function(e){
+	var code = e.which || e.keyCode;
+	if(e.ctrlKey && code == 13){
+		render();
+	}
+})
+
+</script>
+</html>
