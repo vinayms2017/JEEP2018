@@ -25,7 +25,7 @@ For simplicity, the features are reduced to these two lists
 
 ## 2. Three Quick Examples
 
-Although only classes are shown in the examples, keep in mind that there are more objects available, namely, records, structures, fields and groups. 
+Although only classes are shown in the examples, keep in mind that there are more objects available, namely, records, structures, fields and groups.  For a more involved demonstration where a simple tool is built in a tutorial style, read ![this](https://github.com/vinayms2017/JEEP2018/blob/master/demo.md).
 
 ### 2.1. Access Restriction
 
