@@ -11,7 +11,7 @@ The code is available in the Tiny folder of the repository.
 
 ![](https://github.com/vinayms2017/JEEP2018/blob/master/demoapplite.jpeg)
 
-The UI has five components – diagram, script box, script toolbar, script list and legend. The script list is your typical explorer UI. The buttons do as the names suggest; Draw only draws, Add draws and adds the script to the list, Update draws and updates the current script, Remove removes the current script. The Ctrl+Tab key combination is equivalent to clicking the Draw button.
+The UI has five components – diagram, script box, script toolbar, script list and legend. The script list is your typical explorer UI. The buttons do as the names suggest; Draw only draws, Add draws and adds the script to the list, Update draws and updates the current script, Remove removes the current script. The Ctrl+Enter key combination is equivalent to clicking the Draw button.
 
 The script is very simple with limited power due to this being a sample application. The general pattern is `parent[child1, child2, ...]`, where each entry is a name printed in the box. The names must not contain spaces, instead use hyphens that will be converted to spaces.
 
