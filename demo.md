@@ -94,7 +94,7 @@ Firstly, the implementation details are still open to accidental usage. You woul
 
 Secondly, what happens if a derived class has members with names clashing with base names but represent different objects? This will fail silently, but not for long though, but the point is its flawed and imperfect.
 
-Thirdly, and most importantly, what if you need to make the hierarchy serializable? JavaScript doesn’t offer multiple inheritance, and, mixins being as bad as things can get, you would be forced to work with composition or dependency injection, which doesn’t lend itself to natural usage patterns or being useful. For instance, suppose the application had an array of serializable objects that are processed by calling the appropriate member functions. An instance of the serializable hierarchy can’t avail this benefit and must be processed separately.
+Thirdly, and most importantly, what if you need to make the hierarchy serializable? It is most likely that there is a serializable class which must be extended to make the derived class serializable. However, such a thing cannot happen in this case since JavaScript doesn’t offer multiple inheritance, and, mixins being as bad as things can get, you would be forced to work with composition or dependency injection, which doesn’t lend itself to natural usage patterns or being useful. For instance, suppose the application had an array of serializable objects that are processed by calling the appropriate member functions. An instance of the serializable hierarchy can’t avail this benefit and must be processed separately.
 
 ### Coding with JEEP
 
