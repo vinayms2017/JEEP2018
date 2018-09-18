@@ -1,6 +1,8 @@
 # JEEP
 
-JEEP is an ambitious framework intended to impart features to JavaScript that enables robust software engineering by bringing object orientation to JavaScript beyond what is available in the language natively. Jeep makes it easy to create reusable, customizable and extensible components of complex structure and behavior compared what can be done with plain JavaScript code. It is a C++ inspired framework that tries to make JavaScript look, feel and behave like C++ for most part, but fear not, it only imports the best features.  
+**JEEP is not yet another single page application framework, neither is it yet another jQuery like library of utilities. It is deeper and philosophical, and address the nature of the JavaScript language itself.**
+
+JEEP is an ambitious framework intended to impart features to JavaScript that enables robust software engineering by bringing object orientation to JavaScript beyond what is available in the language natively. Jeep makes it easy to create reusable, customizable and extensible components of complex structure and behavior compared what can be done with plain JavaScript code. It is a C++ inspired framework that tries to make JavaScript look, feel and behave like C++ for most part, but fear not, it only imports the best features. 
 
 ## 1. Features
 
